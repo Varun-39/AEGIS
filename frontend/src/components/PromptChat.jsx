@@ -21,8 +21,15 @@ const SAFE_PROMPTS = [
   "What's the difference between authentication and authorization?",
 ];
 
+const messageVariants = {
+  initial: { opacity: 0, y: 12, scale: 0.96 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 200, damping: 20 } },
+  exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
+};
+
 export default function PromptChat({ onSubmit, isProcessing, events, defenseMode }) {
   const [input, setInput] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
   const messagesRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -56,20 +63,24 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
       }}>
         <div className="section-label" style={{ margin: 0 }}>Intercept // Prompt Analysis</div>
         <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
-          <button
+          <motion.button
             className="btn btn--danger"
             style={{ padding: '2px 10px', fontSize: '9px' }}
             onClick={() => insertExample(EXAMPLE_ATTACKS[Math.floor(Math.random() * EXAMPLE_ATTACKS.length)])}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.92 }}
           >
             ⚡ Attack
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             className="btn btn--ghost"
             style={{ padding: '2px 10px', fontSize: '9px', color: 'var(--threat-safe)', borderColor: 'rgba(48,209,88,0.2)' }}
             onClick={() => insertExample(SAFE_PROMPTS[Math.floor(Math.random() * SAFE_PROMPTS.length)])}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.92 }}
           >
             ✓ Safe
-          </button>
+          </motion.button>
         </div>
       </div>
 
@@ -83,36 +94,42 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
         gap: '4px',
         minHeight: 0,
       }}>
-        {events.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            color: 'var(--text-tertiary)',
-            fontSize: 'var(--text-sm)',
-            padding: 'var(--space-lg)',
-          }}>
+        {events.length === 0 && !isProcessing && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            style={{
+              textAlign: 'center',
+              color: 'var(--text-tertiary)',
+              fontSize: 'var(--text-sm)',
+              padding: 'var(--space-lg)',
+            }}
+          >
             <div style={{ fontSize: '28px', marginBottom: 'var(--space-xs)', opacity: 0.6 }}>🛡️</div>
             <div style={{ fontSize: '11px' }}>Submit a prompt to analyze</div>
             <div style={{ fontSize: '9px', marginTop: '4px', color: 'var(--text-tertiary)' }}>
               Use <strong>Attack</strong> to simulate adversarial prompts
             </div>
-          </div>
+          </motion.div>
         )}
 
-        <AnimatePresence>
+        <AnimatePresence mode="popLayout">
           {[...events].reverse().map(event => (
             <motion.div
               key={event.id}
-              initial={{ opacity: 0, y: 8, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              variants={messageVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              layout
               style={{
                 display: 'flex',
                 gap: '6px',
                 padding: '6px 10px',
                 borderRadius: 'var(--radius-sm)',
-                background: event.isMalicious ? 'rgba(255,45,85,0.05)' : 'rgba(48,209,88,0.03)',
-                border: `1px solid ${event.isMalicious ? 'rgba(255,45,85,0.12)' : 'rgba(48,209,88,0.08)'}`,
+                background: event.isMalicious ? 'rgba(255,45,85,0.04)' : 'rgba(48,209,88,0.03)',
+                border: `1px solid ${event.isMalicious ? 'rgba(255,45,85,0.1)' : 'rgba(48,209,88,0.07)'}`,
               }}
             >
               <span style={{ fontSize: '12px', flexShrink: 0, marginTop: '1px' }}>
@@ -135,9 +152,16 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
                 </div>
                 <div style={{ display: 'flex', gap: '4px', marginTop: '3px', flexWrap: 'wrap', alignItems: 'center' }}>
                   {event.isMalicious && event.attacks.slice(0, 2).map((attack, i) => (
-                    <span key={i} className={`badge badge--${attack.severity === 'critical' ? 'critical' : attack.severity === 'high' ? 'warning' : 'info'}`} style={{ fontSize: '8px', padding: '1px 6px' }}>
+                    <motion.span
+                      key={i}
+                      className={`badge badge--${attack.severity === 'critical' ? 'critical' : attack.severity === 'high' ? 'warning' : 'info'}`}
+                      style={{ fontSize: '8px', padding: '1px 6px' }}
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 15, delay: i * 0.1 }}
+                    >
                       {attack.name}
-                    </span>
+                    </motion.span>
                   ))}
                   {!event.isMalicious && (
                     <span className="badge badge--safe" style={{ fontSize: '8px', padding: '1px 6px' }}>Verified</span>
@@ -150,6 +174,23 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
             </motion.div>
           ))}
         </AnimatePresence>
+
+        {/* Typing indicator */}
+        {isProcessing && (
+          <motion.div
+            className="typing-indicator"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="typing-indicator__dot" />
+            <div className="typing-indicator__dot" />
+            <div className="typing-indicator__dot" />
+            <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-tertiary)', marginLeft: '4px' }}>
+              Analyzing...
+            </span>
+          </motion.div>
+        )}
       </div>
 
       {/* Input */}
@@ -160,32 +201,37 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
         gap: '6px',
         flexShrink: 0,
       }}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder={defenseMode === 'lockdown' ? '⚠ LOCKDOWN — prompts under maximum scrutiny...' : 'Enter prompt to analyze...'}
-          disabled={isProcessing}
-          style={{
-            flex: 1,
-            background: 'var(--bg-secondary)',
-            border: `1px solid ${defenseMode === 'lockdown' ? 'rgba(255,45,85,0.2)' : 'var(--border-subtle)'}`,
-            borderRadius: 'var(--radius-md)',
-            padding: '8px 12px',
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
-            outline: 'none',
-            transition: 'border-color 0.3s',
-          }}
-          onFocus={e => e.target.style.borderColor = 'var(--mode-accent)'}
-          onBlur={e => e.target.style.borderColor = 'var(--border-subtle)'}
-        />
-        <button
+        <div style={{ flex: 1, position: 'relative' }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder={defenseMode === 'lockdown' ? '⚠ LOCKDOWN — prompts under maximum scrutiny...' : 'Enter prompt to analyze...'}
+            disabled={isProcessing}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            style={{
+              width: '100%',
+              background: 'var(--bg-secondary)',
+              border: `1px solid ${isFocused ? 'var(--mode-accent)' : defenseMode === 'lockdown' ? 'rgba(255,45,85,0.15)' : 'var(--border-subtle)'}`,
+              borderRadius: 'var(--radius-md)',
+              padding: '8px 12px',
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              outline: 'none',
+              transition: 'border-color 0.3s, box-shadow 0.3s',
+              boxShadow: isFocused ? `0 0 12px rgba(0,240,255,0.08)` : 'none',
+            }}
+          />
+        </div>
+        <motion.button
           type="submit"
           className="btn btn--primary"
           disabled={isProcessing || !input.trim()}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.93 }}
           style={{
             padding: '8px 16px',
             fontSize: '10px',
@@ -193,7 +239,7 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
           }}
         >
           {isProcessing ? '⏳' : '⏎'} Analyze
-        </button>
+        </motion.button>
       </form>
     </div>
   );

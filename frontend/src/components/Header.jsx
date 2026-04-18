@@ -8,6 +8,18 @@ const PIPELINE_LAYERS = [
   { key: 'egress', label: 'Egress' },
 ];
 
+const containerVariants = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.06, delayChildren: 0.2 },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: -8 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 200, damping: 20 } },
+};
+
 export default function Header({ trustScore, defenseMode, totalBlocked, totalAnalyzed, pipelineStatus, onReset }) {
   const modeConfig = {
     normal: { label: 'NORMAL', dotClass: '' },
@@ -19,63 +31,119 @@ export default function Header({ trustScore, defenseMode, totalBlocked, totalAna
 
   return (
     <motion.header
-      className="dashboard__header glass-panel"
-      initial={{ opacity: 0, y: -20 }}
+      className="dashboard__header glass-panel glass-panel--no-hover"
+      initial={{ opacity: 0, y: -30 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      transition={{ type: 'spring', stiffness: 120, damping: 20 }}
     >
       <div className="logo">
-        <div className="logo__icon">🛡️</div>
+        <motion.div
+          className="logo__icon"
+          whileHover={{ scale: 1.1, rotate: 5 }}
+          whileTap={{ scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+        >
+          🛡️
+        </motion.div>
         <div>
-          <div className="logo__text text-gradient">AEGIS</div>
+          <div className="logo__text">AEGIS</div>
           <div className="logo__tagline">Autonomous Security Kernel</div>
         </div>
       </div>
 
-      <div className="status-bar">
+      <motion.div
+        className="status-bar"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {/* Pipeline Status Dots */}
-        <div className="pipeline-dots" title="Security Pipeline Status">
-          {PIPELINE_LAYERS.map(layer => {
+        <motion.div className="pipeline-dots" title="Security Pipeline Status" variants={itemVariants}>
+          {PIPELINE_LAYERS.map((layer, i) => {
             const status = pipelineStatus[layer.key] || 'nominal';
             return (
-              <div
+              <motion.div
                 key={layer.key}
                 className={`pipeline-dot pipeline-dot--${status}`}
                 title={`${layer.label}: ${status.toUpperCase()}`}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 15, delay: 0.3 + i * 0.08 }}
               />
             );
           })}
-        </div>
+        </motion.div>
 
-        <div className="status-item">
+        <motion.div className="status-item" variants={itemVariants}>
           <span>Scanned</span>
-          <span className="status-item__value mono">{totalAnalyzed}</span>
-        </div>
-        <div className="status-item">
+          <motion.span
+            className="status-item__value mono"
+            key={totalAnalyzed}
+            initial={{ scale: 1.3, color: 'var(--accent-cyan)' }}
+            animate={{ scale: 1, color: 'var(--text-primary)' }}
+            transition={{ duration: 0.4 }}
+          >
+            {totalAnalyzed}
+          </motion.span>
+        </motion.div>
+
+        <motion.div className="status-item" variants={itemVariants}>
           <span>Blocked</span>
-          <span className="status-item__value mono" style={{ color: totalBlocked > 0 ? 'var(--threat-critical)' : 'var(--text-tertiary)' }}>
+          <motion.span
+            className="status-item__value mono"
+            key={totalBlocked}
+            initial={{ scale: 1.4 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 10 }}
+            style={{ color: totalBlocked > 0 ? 'var(--threat-critical)' : 'var(--text-tertiary)' }}
+          >
             {totalBlocked}
-          </span>
-        </div>
-        <div className="status-item">
+          </motion.span>
+        </motion.div>
+
+        <motion.div className="status-item" variants={itemVariants}>
           <span>Trust</span>
-          <span className="status-item__value mono" style={{
-            color: trustScore > 70 ? 'var(--threat-safe)' : trustScore > 30 ? 'var(--threat-medium)' : 'var(--threat-critical)',
-          }}>
+          <motion.span
+            className="status-item__value mono"
+            key={trustScore}
+            animate={{
+              color: trustScore > 70 ? 'var(--threat-safe)' : trustScore > 30 ? 'var(--threat-medium)' : 'var(--threat-critical)',
+            }}
+            transition={{ duration: 0.6 }}
+          >
             {trustScore}%
-          </span>
-        </div>
+          </motion.span>
+        </motion.div>
 
         {/* Defense Mode Badge */}
-        <div className={`defense-badge defense-badge--${defenseMode}`}>
+        <motion.div
+          className={`defense-badge defense-badge--${defenseMode}`}
+          variants={itemVariants}
+          layout
+          transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+        >
           <div className={`pulse-dot ${mode.dotClass}`} style={{ width: '6px', height: '6px' }} />
-          {mode.label}
-        </div>
+          <motion.span
+            key={mode.label}
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {mode.label}
+          </motion.span>
+        </motion.div>
 
-        <button className="btn btn--ghost" onClick={onReset} style={{ padding: '5px 12px', fontSize: '9px' }}>
+        <motion.button
+          className="btn btn--ghost"
+          onClick={onReset}
+          style={{ padding: '5px 12px', fontSize: '9px' }}
+          whileHover={{ scale: 1.05, borderColor: 'var(--mode-accent)' }}
+          whileTap={{ scale: 0.92 }}
+          variants={itemVariants}
+        >
           Reset
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
     </motion.header>
   );
 }

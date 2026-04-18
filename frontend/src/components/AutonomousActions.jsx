@@ -10,6 +10,24 @@ const SIMULATED_ACTIONS = [
   { icon: '📊', message: 'Trust decay function recalibrated (λ=0.15)', type: 'info' },
 ];
 
+const actionVariants = {
+  initial: { opacity: 0, x: -20, height: 0, marginBottom: 0 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    height: 'auto',
+    marginBottom: 2,
+    transition: { type: 'spring', stiffness: 200, damping: 20, mass: 0.8 },
+  },
+  exit: {
+    opacity: 0,
+    x: 15,
+    height: 0,
+    marginBottom: 0,
+    transition: { duration: 0.2, ease: 'easeIn' },
+  },
+};
+
 export default function AutonomousActions({ actions }) {
   const [simulatedActions, setSimulatedActions] = useState([]);
 
@@ -35,10 +53,10 @@ export default function AutonomousActions({ actions }) {
   ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 20);
 
   const typeStyles = {
-    info: { borderColor: 'rgba(0, 240, 255, 0.15)', textColor: 'var(--text-secondary)' },
-    warning: { borderColor: 'rgba(255, 159, 10, 0.2)', textColor: 'var(--threat-medium)' },
-    critical: { borderColor: 'rgba(255, 45, 85, 0.25)', textColor: 'var(--threat-critical)' },
-    recovery: { borderColor: 'rgba(48, 209, 88, 0.2)', textColor: 'var(--threat-safe)' },
+    info: { borderColor: 'rgba(0, 240, 255, 0.12)', textColor: 'var(--text-secondary)', glowColor: 'rgba(0, 240, 255, 0.05)' },
+    warning: { borderColor: 'rgba(255, 159, 10, 0.18)', textColor: 'var(--threat-medium)', glowColor: 'rgba(255, 159, 10, 0.04)' },
+    critical: { borderColor: 'rgba(255, 45, 85, 0.2)', textColor: 'var(--threat-critical)', glowColor: 'rgba(255, 45, 85, 0.04)' },
+    recovery: { borderColor: 'rgba(48, 209, 88, 0.18)', textColor: 'var(--threat-safe)', glowColor: 'rgba(48, 209, 88, 0.04)' },
   };
 
   return (
@@ -79,30 +97,40 @@ export default function AutonomousActions({ actions }) {
         padding: 'var(--space-xs)',
         minHeight: 0,
       }}>
-        <AnimatePresence>
-          {allActions.map(action => {
+        <AnimatePresence initial={false}>
+          {allActions.map((action, index) => {
             const style = typeStyles[action.type] || typeStyles.info;
+            const isNew = !action.simulated && index === 0;
             return (
               <motion.div
                 key={action.id}
-                initial={{ opacity: 0, x: -15, height: 0 }}
-                animate={{ opacity: 1, x: 0, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.25 }}
+                variants={actionVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                layout
                 style={{
                   display: 'flex',
                   gap: '6px',
                   padding: '5px var(--space-sm)',
                   borderRadius: 'var(--radius-sm)',
-                  marginBottom: '2px',
                   fontSize: '10px',
                   fontFamily: 'var(--font-mono)',
                   borderLeft: `2px solid ${style.borderColor}`,
-                  opacity: action.simulated ? 0.45 : 1,
+                  opacity: action.simulated ? 0.4 : 1,
                   lineHeight: 1.4,
+                  background: isNew ? style.glowColor : 'transparent',
+                  transition: 'background 1s ease',
                 }}
               >
-                <span style={{ flexShrink: 0, fontSize: '11px' }}>{action.icon}</span>
+                <motion.span
+                  style={{ flexShrink: 0, fontSize: '11px' }}
+                  initial={!action.simulated ? { scale: 1.4 } : false}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 12 }}
+                >
+                  {action.icon}
+                </motion.span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ color: style.textColor }}>
                     {action.message}
@@ -126,14 +154,24 @@ export default function AutonomousActions({ actions }) {
         </AnimatePresence>
 
         {allActions.length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            color: 'var(--text-tertiary)',
-            fontSize: 'var(--text-xs)',
-            padding: 'var(--space-lg)',
-          }}>
-            Autonomous defense engine initializing...
-          </div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            style={{
+              textAlign: 'center',
+              color: 'var(--text-tertiary)',
+              fontSize: 'var(--text-xs)',
+              padding: 'var(--space-lg)',
+            }}
+          >
+            <motion.span
+              animate={{ opacity: [0.3, 1, 0.3] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              Autonomous defense engine initializing...
+            </motion.span>
+          </motion.div>
         )}
       </div>
     </div>
