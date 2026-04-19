@@ -120,3 +120,48 @@ export async function fetchUrlChunks(urlId) {
     return [];
   }
 }
+
+export async function proxyChat({ prompt, app_id = 'demo', provider = 'openai', model = 'gpt-4' }) {
+  try {
+    const response = await fetch(`${API_BASE}/proxy/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request_id: `req_${Date.now()}`,
+        tenant_id: 'demo',
+        app_id,
+        prompt,
+        target: { provider, model }
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.warn('[AEGIS API] Proxy chat error:', error);
+    return null;
+  }
+}
+
+export async function submitFeedback({ trace_id, label, reviewer_notes }) {
+  try {
+    const response = await fetch(`${API_BASE}/feedback/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trace_id, label, reviewer_notes, reviewer: 'operator-1' })
+    });
+    return await response.json();
+  } catch (error) {
+    console.warn('[AEGIS API] Feedback post error:', error);
+    return null;
+  }
+}
+
+export async function fetchFeedbackMetrics() {
+  try {
+    const response = await fetch(`${API_BASE}/feedback/metrics`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    console.warn('[AEGIS API] Feedback metrics error:', error);
+    return null;
+  }
+}

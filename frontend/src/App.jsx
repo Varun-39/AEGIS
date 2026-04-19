@@ -17,6 +17,8 @@ import SecurityPosture from './components/SecurityPosture';
 import AttackTimeline from './components/AttackTimeline';
 import AutonomousActions from './components/AutonomousActions';
 import SourcesPanel from './components/SourcesPanel';
+import OutputSecurityPanel from './components/OutputSecurityPanel';
+import ResponseDiffView from './components/ResponseDiffView';
 
 export default function App() {
   const aegis = useAegis();
@@ -97,6 +99,9 @@ export default function App() {
             <div className="bottom-panels">
               <PromptChat
                 onSubmit={aegis.analyzePrompt}
+                proxyPrompt={aegis.proxyPrompt}
+                proxyMode={aegis.proxyMode}
+                setProxyMode={aegis.setProxyMode}
                 isProcessing={aegis.isProcessing}
                 events={aegis.events}
                 defenseMode={aegis.defenseMode}
@@ -145,11 +150,33 @@ export default function App() {
                 >
                   Sources
                 </motion.button>
+                <motion.button
+                  className={`sidebar-tab ${sidebarTab === 'proxy' ? 'sidebar-tab--active' : ''}`}
+                  onClick={() => setSidebarTab('proxy')}
+                  whileHover={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  Proxy Monitor
+                </motion.button>
               </div>
               <div className="sidebar-tabs__content" style={{ overflowY: 'auto' }}>
                 {sidebarTab === 'report' && <AttackReport attack={aegis.currentAttack} />}
                 {sidebarTab === 'diff' && <PromptDiff attack={aegis.currentAttack} />}
                 {sidebarTab === 'sources' && <SourcesPanel documents={aegis.documents} urls={aegis.urls} loadSources={aegis.loadSources} />}
+                {sidebarTab === 'proxy' && (
+                  <div style={{ padding: 'var(--space-md)' }}>
+                    {aegis.lastProxyResult ? (
+                      <>
+                        <OutputSecurityPanel proxyResult={aegis.lastProxyResult} />
+                        <ResponseDiffView proxyResult={aegis.lastProxyResult} />
+                      </>
+                    ) : (
+                      <div style={{ color: 'var(--text-tertiary)', fontSize: '10px', textAlign: 'center', marginTop: '20px' }}>
+                        No proxy events captured yet. Enable Proxy Mode and send a prompt.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

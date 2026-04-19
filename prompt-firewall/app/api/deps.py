@@ -18,7 +18,13 @@ from app.db.repositories.documents_repo import DocumentsRepo
 from app.db.repositories.document_chunks_repo import DocumentChunksRepo
 from app.db.repositories.url_sources_repo import UrlSourcesRepo
 from app.db.repositories.url_chunks_repo import UrlChunksRepo
+from app.db.repositories.requests_repo import RequestsRepo
+from app.db.repositories.canary_repo import CanaryRepo
+from app.db.repositories.output_repo import OutputRepo
 from app.services.event_service import EventService
+from app.services.canary_service import CanaryService
+from app.services.output_scan_service import OutputScanService
+from app.services.routing_service import RoutingService
 
 def get_registry(request: Request) -> ScannerRegistry:
     return request.app.state.scanner_registry
@@ -81,5 +87,27 @@ def get_url_service(
         url_chunks_repo=UrlChunksRepo(session),
         chunker=chunker,
         scan_engine=scan_engine,
+        event_service=event_service
+    )
+
+def get_routing_service(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    scan_orchestrator: Annotated[ScanOrchestrator, Depends(get_orchestrator)],
+    scan_engine: Annotated[ScanEngine, Depends(get_scan_engine)],
+    event_service: Annotated[EventService, Depends(get_event_service)]
+) -> RoutingService:
+    requests_repo = RequestsRepo(session)
+    canary_repo = CanaryRepo(session)
+    output_repo = OutputRepo(session)
+    
+    canary_service = CanaryService(canary_repo)
+    output_scan_service = OutputScanService(scan_engine)
+    
+    return RoutingService(
+        scan_orchestrator=scan_orchestrator,
+        canary_service=canary_service,
+        output_scan_service=output_scan_service,
+        output_repo=output_repo,
+        requests_repo=requests_repo,
         event_service=event_service
     )

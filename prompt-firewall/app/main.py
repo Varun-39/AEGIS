@@ -12,6 +12,8 @@ from app.api.router_incidents import router as incidents_router
 from app.api.router_ws import router as ws_router
 from app.api.router_documents import router as documents_router
 from app.api.router_urls import router as urls_router
+from app.api.router_proxy import router as proxy_router
+from app.api.router_feedback import router as feedback_router
 
 from app.scanners.registry import ScannerRegistry
 from app.scanners.engine import ScanEngine
@@ -95,3 +97,5 @@ app.include_router(incidents_router)
 app.include_router(ws_router)
 app.include_router(documents_router)
 app.include_router(urls_router)
+app.include_router(proxy_router)
+app.include_router(feedback_router, prefix="/v1/feedback", tags=["Feedback"])

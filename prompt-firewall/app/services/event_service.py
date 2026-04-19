@@ -266,3 +266,50 @@ class EventService:
         )
         
         await self._ws_manager.broadcast(event.model_dump())
+
+    async def emit_output_blocked(self, request_id: str, trace_id: str, detections: list[Detection], action: str, provider: str, model: str, safe_excerpt: str):
+        if self._ws_manager.active_count == 0:
+            return
+            
+        top_severity = "low"
+        attack_types = []
+        for d in detections:
+            if _SEVERITY_RANK.get(d.severity, 0) > _SEVERITY_RANK.get(top_severity, 0):
+                top_severity = d.severity
+            if d.attack_type not in attack_types:
+                attack_types.append(d.attack_type)
+                
+        sorted_detections = sorted(detections, key=lambda d: d.score, reverse=True)[:5]
+        top_detections = [
+            CompactDetection(
+                scanner=d.scanner,
+                attack_type=d.attack_type,
+                severity=d.severity,
+                score=d.score,
+                explanation=d.explanation,
+                matched_excerpt=redact_text(d.matched_text, max_len=80),
+            )
+            for d in sorted_detections
+        ]
+        
+        event = AttackDetectedEvent(
+            request_id=request_id,
+            trace_id=trace_id,
+            decision="block",
+            risk_score=max((d.score for d in detections), default=0.0),
+            severity=top_severity,
+            attack_types=attack_types,
+            recommended_action=action,
+            channel_scores={"output": max((d.score for d in detections), default=0.0)},
+            primary_channel="output",
+            source_summary=SourceSummary(
+                channels_scanned=1,
+                primary_channel="output",
+                source_types=["output_content"],
+                has_untrusted=True
+            ),
+            operator_summary=f"Output from {provider}/{model} blocked/redacted ({action}).",
+            top_detections=top_detections,
+            source_kind="output"
+        )
+        await self._ws_manager.broadcast(event.model_dump())

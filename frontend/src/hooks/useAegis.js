@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAegisRealtime } from './useAegisRealtime';
-import { fetchIncidents, fetchDocuments, fetchUrls } from './aegisApi';
+import { fetchIncidents, fetchDocuments, fetchUrls, proxyChat as apiProxyChat } from './aegisApi';
 
 // ============================================================
 // Tool Permissions
@@ -103,6 +103,8 @@ export function useAegis() {
   
   const [documents, setDocuments] = useState([]);
   const [urls, setUrls] = useState([]);
+  const [proxyMode, setProxyMode] = useState(false); // false = scan only, true = proxy
+  const [lastProxyResult, setLastProxyResult] = useState(null);
   
   const eventIdRef = useRef(0);
 
@@ -316,6 +318,8 @@ export function useAegis() {
       trustScore: 0, // Will be updated by state
       defenseMode: 'normal', // Will be updated by state
       operatorSummary: event.operator_summary,
+      sourceKind: event.source_kind || 'prompt',
+      quarantined: event.quarantined,
     };
 
     // Trigger graph animation
@@ -440,6 +444,42 @@ export function useAegis() {
     setIsProcessing(false);
   }, [addAction]);
 
+  const proxyPrompt = useCallback(async (prompt) => {
+    setIsProcessing(true);
+    setTotalAnalyzed(prev => prev + 1);
+    setLastProxyResult(null);
+
+    try {
+      const result = await apiProxyChat({ prompt });
+      if (!result) throw new Error('Proxy unavailable');
+
+      // Add to events for prompt display
+      const event = {
+        id: result.trace_id,
+        timestamp: new Date(),
+        prompt: prompt,
+        isMalicious: result.decision === 'block',
+        riskScore: result.llm_called ? result.output_scan?.risk_score || 0 : result.risk_score || 0,
+        severity: result.decision === 'block' ? 'high' : 'safe',
+        attacks: [], 
+        trustScore: result.decision === 'block' ? Math.max(0, trustScore - 15) : trustScore,
+      };
+      
+      setLastProxyResult(result);
+      setEvents(prev => [event, ...prev].slice(0, 50));
+      
+      if (result.decision === 'block') {
+         addAction('🚫', result.llm_called && result.output_scan?.blocked ? 'Output block applied' : 'Prompt blocked before execution', 'warning');
+      } else {
+         addAction('✅', 'Proxied safely', 'info');
+      }
+    } catch (e) {
+      console.warn('Proxy error', e);
+      addAction('⚠️', 'Proxy unavailable', 'warning');
+    }
+    setIsProcessing(false);
+  }, [addAction, trustScore]);
+
   const resetTrust = useCallback(async () => {
     try {
       await fetch('/api/reset-trust?session_id=default', { method: 'POST' });
@@ -503,6 +543,10 @@ export function useAegis() {
         const u = await fetchUrls();
         setUrls(u);
     },
+    proxyMode,
+    setProxyMode,
+    proxyPrompt,
+    lastProxyResult,
     graphData: { nodes: ATTACK_GRAPH_NODES, edges: ATTACK_GRAPH_EDGES },
 
     // Phase 2: WebSocket state

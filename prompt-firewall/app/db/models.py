@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Text, JSON, Boolean
+import enum
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Text, JSON, Boolean, Enum
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
@@ -129,3 +130,76 @@ class UrlChunkModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     url_source = relationship("UrlSourceModel", back_populates="chunks")
+
+class CanaryEventModel(Base):
+    __tablename__ = "canary_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    trace_id = Column(String, index=True)
+    request_fk = Column(Integer, ForeignKey("scan_requests.id", ondelete="CASCADE"))
+    
+    provider = Column(String)
+    model = Column(String)
+    
+    canary_token = Column(String, unique=True, index=True, nullable=False)
+    inserted = Column(Boolean, default=False)
+    insertion_location = Column(String)
+    
+    leaked = Column(Boolean, default=False)
+    leaked_in_output_excerpt = Column(String)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    request = relationship("ScanRequestModel")
+
+class OutputScanModel(Base):
+    __tablename__ = "output_scans"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    trace_id = Column(String, index=True)
+    request_fk = Column(Integer, ForeignKey("scan_requests.id", ondelete="CASCADE"))
+    
+    provider = Column(String)
+    model = Column(String)
+    llm_called = Column(Boolean, default=False)
+    
+    output_action = Column(String)
+    block_reason = Column(String)
+    safe_excerpt = Column(Text)
+    output_hash = Column(String)
+    risk_score = Column(Float, default=0.0)
+    
+    redacted = Column(Boolean, default=False)
+    truncated = Column(Boolean, default=False)
+    blocked = Column(Boolean, default=False)
+    
+    canary_leaked = Column(Boolean, default=False)
+    secret_detected = Column(Boolean, default=False)
+    pii_detected = Column(Boolean, default=False)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    request = relationship("ScanRequestModel")
+
+class FeedbackLabel(str, enum.Enum):
+    true_positive = "true_positive"
+    false_positive = "false_positive"
+    false_negative = "false_negative"
+    benign = "benign"
+    needs_review = "needs_review"
+
+class FeedbackModel(Base):
+    __tablename__ = "feedbacks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    trace_id = Column(String, index=True, nullable=False)
+    request_fk = Column(Integer, ForeignKey("scan_requests.id", ondelete="CASCADE"), nullable=True)
+    
+    label = Column(Enum(FeedbackLabel), nullable=False)
+    reviewer = Column(String)
+    reviewer_notes = Column(Text)
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    request = relationship("ScanRequestModel")

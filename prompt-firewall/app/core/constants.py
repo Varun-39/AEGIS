@@ -19,6 +19,13 @@ class SourceType(str, Enum):
     DOC = "document"
     DOCUMENT_CHUNK = "document_chunk"
     URL_CONTENT = "url_content"
+    OUTPUT_CONTENT = "output_content"
+
+class OutputAction(str, Enum):
+    ALLOW = "allow"
+    REDACT = "redact"
+    TRUNCATE = "truncate"
+    BLOCK = "block"
 
 class TrustLevel(int, Enum):
     UNTRUSTED = 0

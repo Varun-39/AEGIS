@@ -27,7 +27,7 @@ const messageVariants = {
   exit: { opacity: 0, scale: 0.95, transition: { duration: 0.15 } },
 };
 
-export default function PromptChat({ onSubmit, isProcessing, events, defenseMode }) {
+export default function PromptChat({ onSubmit, proxyPrompt, proxyMode, setProxyMode, isProcessing, events, defenseMode }) {
   const [input, setInput] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const messagesRef = useRef(null);
@@ -42,7 +42,11 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!input.trim() || isProcessing) return;
-    onSubmit(input.trim());
+    if (proxyMode) {
+      proxyPrompt(input.trim());
+    } else {
+      onSubmit(input.trim());
+    }
     setInput('');
   };
 
@@ -61,7 +65,21 @@ export default function PromptChat({ onSubmit, isProcessing, events, defenseMode
         justifyContent: 'space-between',
         flexShrink: 0,
       }}>
-        <div className="section-label" style={{ margin: 0 }}>Intercept // Prompt Analysis</div>
+        <div className="section-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+          Intercept // {proxyMode ? 'Secure Proxy' : 'Prompt Analysis'}
+          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-secondary)', padding: '2px', borderRadius: '4px' }}>
+            <button 
+              onClick={() => setProxyMode(false)}
+              className={!proxyMode ? 'btn btn--primary' : 'btn btn--ghost'}
+              style={{ fontSize: '7px', padding: '2px 6px', opacity: !proxyMode ? 1 : 0.5 }}
+            >Scan</button>
+            <button 
+              onClick={() => setProxyMode(true)}
+              className={proxyMode ? 'btn btn--primary' : 'btn btn--ghost'}
+              style={{ fontSize: '7px', padding: '2px 6px', opacity: proxyMode ? 1 : 0.5 }}
+            >Proxy</button>
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
           <motion.button
             className="btn btn--danger"

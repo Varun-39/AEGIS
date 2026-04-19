@@ -32,5 +32,7 @@ async def db_session():
 
 @pytest.fixture
 async def app_client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
+    from app.main import lifespan
+    async with lifespan(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            yield client
