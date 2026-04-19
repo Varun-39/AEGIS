@@ -25,38 +25,9 @@ These risks map directly to the OWASP LLM Top 10 vulnerabilities (LLM01: Prompt 
 
 AEGIS operates as an active interception boundary natively bounding LLM traffic across both ingress and egress lifecycles dynamically.
 
-```text
-               [ External Environments ]
-           (Prompts, Documents, URLs, RAG chunks)
-                          |
-                  +-------v-------+         +-------------------------+
-                  |  Normalizer   | ------> |    Scanner Pipeline     |
-                  | (Chunk/Clean) |         | (Regex, YARA, ML Guard) |
-                  +-------+-------+         +------------+------------+
-                          |                              |
-                          +-----------> [ Policy Engine ] <---+
-                                                 |            |
-                                       /---------+---------\  |
-                              (ALLOW/SANITIZE)           (BLOCK)
-                                     |                     |  |
-                          +----------v---------+    +------v------+
-                          |   Canary Service   |    |  WebSocket  |
-                          | (Inject Context)   |    |  Dashboard  |
-                          +----------+---------+    +-------------+
-                                     |                     ^
-                          [ Secure Proxy Gateway ]         |
-                                     |                     |
-                            +--------v---------+           |
-                        +---|   LLM Provider   |---+       |
-                        |   +------------------+   |       |
-                        v                          |     (Alerts)
-                +-------v--------+                 |       |
-                |  Output Scans  | (Checks for PII,|       |
-                | (Redact/Block) |  Secrets, Leaks)|       |
-                +-------+--------+                 |       |
-                        |                          v       |
-                    [ Final Response Allowed ] ----+-------+
-```
+<div align="center">
+  <img src="assets/architecture.png" alt="AEGIS Prompt Secure & Processing Architecture">
+</div>
 
 ---
 
