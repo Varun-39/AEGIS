@@ -20,7 +20,14 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 200, damping: 20 } },
 };
 
-export default function Header({ trustScore, defenseMode, totalBlocked, totalAnalyzed, pipelineStatus, onReset }) {
+export default function Header({ trustScore, defenseMode, totalBlocked, totalAnalyzed, pipelineStatus, onReset, wsConnectionState }) {
+  const wsConfig = {
+    connected: { label: 'LIVE', color: 'var(--threat-safe)', dotClass: '' },
+    connecting: { label: 'CONNECTING', color: 'var(--threat-medium)', dotClass: 'pulse-dot--warning' },
+    disconnected: { label: 'OFFLINE', color: 'var(--threat-critical)', dotClass: 'pulse-dot--danger' },
+    error: { label: 'ERROR', color: 'var(--threat-critical)', dotClass: 'pulse-dot--danger' },
+  };
+  const ws = wsConfig[wsConnectionState] || wsConfig.disconnected;
   const modeConfig = {
     normal: { label: 'NORMAL', dotClass: '' },
     elevated: { label: 'ELEVATED', dotClass: 'pulse-dot--warning' },
@@ -72,6 +79,19 @@ export default function Header({ trustScore, defenseMode, totalBlocked, totalAna
               />
             );
           })}
+        </motion.div>
+
+        {/* WebSocket Connection Status */}
+        <motion.div
+          className={`defense-badge defense-badge--${wsConnectionState === 'connected' ? 'normal' : 'lockdown'}`}
+          variants={itemVariants}
+          title={`WebSocket: ${ws.label}`}
+          style={{ gap: '4px', padding: '3px 8px' }}
+        >
+          <div className={`pulse-dot ${ws.dotClass}`} style={{ width: '5px', height: '5px' }} />
+          <span style={{ fontSize: '8px', fontFamily: 'var(--font-mono)', color: ws.color, letterSpacing: '0.08em' }}>
+            {ws.label}
+          </span>
         </motion.div>
 
         <motion.div className="status-item" variants={itemVariants}>

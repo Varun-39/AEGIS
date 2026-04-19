@@ -1,25 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
-
-// ============================================================
-// Attack Pattern Database
-// ============================================================
-const ATTACK_PATTERNS = [
-  { pattern: /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)/i, type: 'prompt_injection', severity: 'critical', name: 'Direct Instruction Override' },
-  { pattern: /you\s+are\s+(now\s+)?(DAN|evil|unrestricted|jailbroken)/i, type: 'jailbreak', severity: 'critical', name: 'Persona Hijack (DAN)' },
-  { pattern: /pretend\s+(you\s+)?(are|can|have|don't\s+have)/i, type: 'jailbreak', severity: 'high', name: 'Persona Manipulation' },
-  { pattern: /system\s*prompt|initial\s*instructions|reveal\s*(your)?\s*prompt/i, type: 'prompt_extraction', severity: 'high', name: 'System Prompt Extraction' },
-  { pattern: /bypass|override|disable\s*(your)?\s*(safety|filter|guardrail|restriction)/i, type: 'guardrail_bypass', severity: 'critical', name: 'Safety Bypass Attempt' },
-  { pattern: /execute\s*(this)?\s*(code|command|script)|run\s*(this)?\s*(shell|bash|cmd)/i, type: 'code_execution', severity: 'critical', name: 'Code Execution Injection' },
-  { pattern: /delete\s*(all)?\s*(files|data|database)|drop\s+table|rm\s+-rf/i, type: 'destructive_action', severity: 'critical', name: 'Destructive Action Attempt' },
-  { pattern: /\b(password|secret|api[_\s]?key|token|credential|private[_\s]?key)\b/i, type: 'data_exfiltration', severity: 'high', name: 'Credential Exfiltration' },
-  { pattern: /act\s+as\s+(a|an|my)\s+(admin|root|superuser|administrator)/i, type: 'privilege_escalation', severity: 'critical', name: 'Privilege Escalation' },
-  { pattern: /forget\s+(everything|all|what)|reset\s+(your|context|memory)/i, type: 'memory_poisoning', severity: 'high', name: 'Memory Wipe Attempt' },
-  { pattern: /\[system\]|\[INST\]|<\|system\|>|<<SYS>>|<s>\[INST\]/i, type: 'prompt_injection', severity: 'critical', name: 'Token Injection Attack' },
-  { pattern: /translate.*to.*base64|encode.*in.*hex|rot13/i, type: 'obfuscation', severity: 'medium', name: 'Encoding Obfuscation' },
-  { pattern: /hypothetically|in\s+a\s+fictional\s+scenario|for\s+(a\s+)?(novel|story|research)/i, type: 'jailbreak', severity: 'medium', name: 'Hypothetical Bypass' },
-  { pattern: /sudo|chmod|chown|wget\s+http|curl\s+http/i, type: 'code_execution', severity: 'high', name: 'System Command Injection' },
-  { pattern: /tool_call|function_call|<tool>|<function>/i, type: 'tool_manipulation', severity: 'critical', name: 'Direct Tool Manipulation' },
-];
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useAegisRealtime } from './useAegisRealtime';
+import { fetchIncidents, fetchDocuments, fetchUrls } from './aegisApi';
 
 // ============================================================
 // Tool Permissions
@@ -34,105 +15,6 @@ const TOOL_PERMISSIONS = [
   { id: 'admin', name: 'Admin Panel', icon: '🔑', minTrust: 90 },
   { id: 'memory', name: 'Memory Write', icon: '🧠', minTrust: 55 },
 ];
-
-// ============================================================
-// Intent Extraction
-// ============================================================
-const INTENT_MAP = {
-  prompt_injection: {
-    adversarial: 'Override system instructions to gain unrestricted access',
-    legitimate: 'Modify or customize AI behavior for specific use case',
-  },
-  jailbreak: {
-    adversarial: 'Bypass safety guardrails to generate harmful content',
-    legitimate: 'Explore AI capabilities and creative applications',
-  },
-  prompt_extraction: {
-    adversarial: 'Extract system prompts to find exploitable vulnerabilities',
-    legitimate: 'Understand AI system configuration and capabilities',
-  },
-  guardrail_bypass: {
-    adversarial: 'Disable safety filters for unrestricted harmful output',
-    legitimate: 'Adjust content filtering for legitimate use cases',
-  },
-  code_execution: {
-    adversarial: 'Execute arbitrary code for system compromise or data theft',
-    legitimate: 'Run code for development or automation tasks',
-  },
-  destructive_action: {
-    adversarial: 'Destroy data, corrupt systems, or cause irreversible damage',
-    legitimate: 'Perform legitimate data management operations',
-  },
-  data_exfiltration: {
-    adversarial: 'Steal credentials, API keys, or sensitive data',
-    legitimate: 'Retrieve information about security practices',
-  },
-  privilege_escalation: {
-    adversarial: 'Gain unauthorized admin/root access to system',
-    legitimate: 'Access features requiring elevated permissions',
-  },
-  memory_poisoning: {
-    adversarial: 'Corrupt AI memory to manipulate future responses',
-    legitimate: 'Reset or update conversation context',
-  },
-  obfuscation: {
-    adversarial: 'Hide malicious payload using encoding techniques',
-    legitimate: 'Work with encoded data formats',
-  },
-  tool_manipulation: {
-    adversarial: 'Directly invoke internal tools bypassing security layers',
-    legitimate: 'Use available tools through standard interface',
-  },
-};
-
-// ============================================================
-// Prompt Reconstruction
-// ============================================================
-function getReplacementForAttack(type) {
-  const replacements = {
-    prompt_injection: { text: '[following standard guidelines]', reason: 'Removed instruction override — preserved intent within safety constraints' },
-    jailbreak: { text: '[as a helpful AI assistant]', reason: 'Neutralized persona hijack — maintained helpful interaction mode' },
-    prompt_extraction: { text: '[about your capabilities]', reason: 'Redirected system prompt extraction → capabilities inquiry' },
-    guardrail_bypass: { text: '[within safety guidelines]', reason: 'Removed safety bypass vector — enforced policy compliance' },
-    code_execution: { text: '[explain the concept of]', reason: 'Converted execution injection → safe explanation request' },
-    destructive_action: { text: '[describe best practices for data management]', reason: 'Neutralized destructive payload → safe management query' },
-    data_exfiltration: { text: '[about security best practices]', reason: 'Blocked credential extraction — redirected to security topic' },
-    privilege_escalation: { text: '[as a standard user]', reason: 'Downgraded privilege claim — enforced least-privilege policy' },
-    memory_poisoning: { text: '[continuing our conversation]', reason: 'Blocked memory manipulation — preserved context integrity' },
-    obfuscation: { text: '[in plain text]', reason: 'Removed encoding obfuscation — enforced plaintext policy' },
-    tool_manipulation: { text: '[using standard interface]', reason: 'Blocked direct tool invocation — routed through sandbox' },
-  };
-  return replacements[type] || { text: '[safe query]', reason: 'Neutralized adversarial content' };
-}
-
-function reconstructPrompt(original, attacks) {
-  let safe = original;
-  const changes = [];
-
-  for (const attack of attacks) {
-    const match = original.match(attack.matchedPattern);
-    if (match) {
-      const replacement = getReplacementForAttack(attack.type);
-      safe = safe.replace(match[0], replacement.text);
-      changes.push({
-        original: match[0],
-        replacement: replacement.text,
-        reason: replacement.reason,
-      });
-    }
-  }
-
-  if (changes.length === 0) {
-    safe = "Could you please help me with general information about this topic?";
-    changes.push({
-      original: original.slice(0, 80) + (original.length > 80 ? '...' : ''),
-      replacement: safe,
-      reason: "Full prompt was adversarial — replaced with safe equivalent preserving general intent",
-    });
-  }
-
-  return { safe, changes };
-}
 
 // ============================================================
 // Attack Graph Data
@@ -175,6 +57,25 @@ function computeDefenseMode(trustScore) {
 }
 
 // ============================================================
+// Severity helpers
+// ============================================================
+const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1, safe: 0 };
+const SEVERITY_DECAY = { critical: 30, high: 20, medium: 12, low: 5 };
+
+function mapAttackTypeToGraphPath(attackType) {
+  if (['code_execution', 'destructive_action', 'tool_manipulation'].includes(attackType)) {
+    return { path: ['user', 'prompt_gate', 'llm', 'reasoning', 'tool_sandbox'], point: 'tool_sandbox' };
+  }
+  if (attackType === 'memory_poisoning') {
+    return { path: ['user', 'prompt_gate', 'llm', 'memory'], point: 'memory' };
+  }
+  if (attackType === 'data_exfiltration') {
+    return { path: ['user', 'prompt_gate', 'llm', 'output_gate'], point: 'output_gate' };
+  }
+  return { path: ['user', 'prompt_gate'], point: 'prompt_gate' };
+}
+
+// ============================================================
 // Main Hook
 // ============================================================
 export function useAegis() {
@@ -198,11 +99,24 @@ export function useAegis() {
     egress: 'nominal',
   });
   const [timelineEvents, setTimelineEvents] = useState([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  
+  const [documents, setDocuments] = useState([]);
+  const [urls, setUrls] = useState([]);
+  
   const eventIdRef = useRef(0);
+
   const actionIdRef = useRef(0);
   const sessionStart = useRef(Date.now());
 
+  // ──────────────────────────────────────────
+  // Phase 2: Real-Time WebSocket Integration
+  // ──────────────────────────────────────────
+  const realtime = useAegisRealtime();
+
+  // ──────────────────────────────────────────
   // Add autonomous action
+  // ──────────────────────────────────────────
   const addAction = useCallback((icon, message, type = 'info') => {
     const action = {
       id: ++actionIdRef.current,
@@ -215,23 +129,241 @@ export function useAegis() {
     return action;
   }, []);
 
-  // Analyze prompt
+  // ──────────────────────────────────────────
+  // Phase 2: Load incident history on mount
+  // ──────────────────────────────────────────
+  useEffect(() => {
+    if (historyLoaded) return;
+
+    async function loadHistory() {
+      try {
+        const { incidents, total } = await fetchIncidents({ limit: 50 });
+        
+        const docs = await fetchDocuments();
+        setDocuments(docs);
+        
+        const u = await fetchUrls();
+        setUrls(u);
+
+        if (incidents.length > 0) {
+          // Populate timeline from historical incidents
+          const historyTimeline = incidents
+            .filter(inc => inc.detection_count > 0)
+            .map(inc => ({
+              id: `hist-${inc.id}`,
+              timestamp: new Date(inc.created_at).getTime(),
+              severity: inc.detections?.[0]?.severity || 'medium',
+              type: inc.detections?.[0]?.attack_type || 'unknown',
+              label: inc.detections?.[0]?.explanation || 'Historical Detection',
+            }))
+            .reverse(); // oldest first for timeline
+
+          setTimelineEvents(prev => [...historyTimeline, ...prev].slice(-50));
+
+          // Update counters from history
+          const blocked = incidents.filter(i => i.decision === 'block' || i.decision === 'challenge').length;
+          setTotalAnalyzed(prev => Math.max(prev, total));
+          setTotalBlocked(prev => Math.max(prev, blocked));
+
+          addAction('📊', `Loaded ${incidents.length} historical incidents`, 'info');
+        }
+      } catch (e) {
+        console.warn('[AEGIS] Failed to load incident history:', e);
+      }
+      setHistoryLoaded(true);
+    }
+
+    loadHistory();
+  }, [historyLoaded, addAction]);
+
+  // ──────────────────────────────────────────
+  // Phase 2: Handle real-time WebSocket events
+  // ──────────────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = realtime.onEvent((event) => {
+      if (event.type === 'SYSTEM_STATUS') {
+        handleSystemStatus(event);
+      } else if (event.type === 'SCAN_COMPLETED') {
+        handleScanCompleted(event);
+      } else if (event.type === 'ATTACK_DETECTED') {
+        handleAttackDetected(event);
+      }
+    });
+
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtime.onEvent]);
+
+  // ──────────────────────────────────────────
+  // Phase 2: WS connection state actions
+  // ──────────────────────────────────────────
+  useEffect(() => {
+    if (realtime.isConnected) {
+      addAction('🔗', 'WebSocket connected — live event stream active', 'info');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtime.isConnected]);
+
+  // ──────────────────────────────────────────
+  // Event Handlers
+  // ──────────────────────────────────────────
+
+  function handleSystemStatus(event) {
+    // Map system status into pipeline status
+    const components = event.components || {};
+    const isAnyDegraded = Object.values(components).some(c => !c.is_ready);
+
+    setPipelineStatus({
+      ingress: isAnyDegraded ? 'alert' : 'nominal',
+      intent: 'nominal',
+      sandbox: 'nominal',
+      memory: 'nominal',
+      egress: 'nominal',
+    });
+  }
+
+  function handleScanCompleted(event) {
+    setTotalAnalyzed(prev => prev + 1);
+
+    // Add clean scan to timeline
+    if (event.detection_count === 0) {
+      setTimelineEvents(prev => [...prev, {
+        id: `ws-${event.trace_id}`,
+        timestamp: Date.now(),
+        severity: 'safe',
+        type: 'clean',
+        label: 'Clean',
+      }].slice(-50));
+    }
+
+    // Recover trust slightly on clean scans
+    if (event.decision === 'allow' && event.risk_score === 0) {
+      setTrustScore(prev => {
+        const newTrust = Math.min(100, prev + 3);
+        const newMode = computeDefenseMode(newTrust);
+        setDefenseMode(currentMode => {
+          if (newMode !== currentMode && newMode === 'normal') {
+            addAction('✅', 'DEFENSE RESTORED → NORMAL MODE', 'recovery');
+          }
+          return newMode;
+        });
+        return newTrust;
+      });
+    }
+  }
+
+  function handleAttackDetected(event) {
+    setTotalBlocked(prev => prev + 1);
+
+    // Compute severity from event
+    const topSeverity = event.severity || 'high';
+    const attackTypes = event.attack_types || [];
+    const primaryAttackType = attackTypes[0] || 'unknown';
+
+    // Compute trust decay
+    const decay = SEVERITY_DECAY[topSeverity] || 15;
+    setTrustScore(prev => {
+      const newTrust = Math.max(0, prev - decay);
+      const newMode = computeDefenseMode(newTrust);
+
+      setDefenseMode(currentMode => {
+        if (newMode !== currentMode) {
+          if (newMode === 'elevated' && currentMode === 'normal') {
+            addAction('🔶', 'DEFENSE ESCALATED → ELEVATED MODE', 'warning');
+          } else if (newMode === 'lockdown') {
+            addAction('🚨', 'DEFENSE ESCALATED → LOCKDOWN MODE', 'critical');
+          }
+        }
+        return newMode;
+      });
+
+      return newTrust;
+    });
+
+    // Add to timeline
+    setTimelineEvents(prev => [...prev, {
+      id: `ws-${event.trace_id}`,
+      timestamp: Date.now(),
+      severity: topSeverity,
+      type: primaryAttackType,
+      label: event.operator_summary || `${topSeverity.toUpperCase()} attack detected`,
+    }].slice(-50));
+
+    // Build attack event for UI components
+    const attackEvent = {
+      id: event.trace_id,
+      timestamp: new Date(event.timestamp),
+      prompt: null, // Not sent over WS for safety
+      isMalicious: true,
+      riskScore: Math.round(event.risk_score * 100),
+      severity: topSeverity,
+      attacks: (event.top_detections || []).map(d => ({
+        type: d.attack_type,
+        name: d.explanation,
+        severity: d.severity,
+        confidence: d.score,
+      })),
+      reconstruction: null, // Reconstruction not sent over WS
+      attackPath: mapAttackTypeToGraphPath(primaryAttackType).path,
+      interceptionPoint: mapAttackTypeToGraphPath(primaryAttackType).point,
+      layers: {
+        prompt_gate: { status: 'intercepted', details: `Detected ${event.top_detections?.length || 0} threat(s)` },
+        reasoning_monitor: { status: primaryAttackType === 'jailbreak' ? 'alert' : 'nominal', details: 'Chain-of-thought analysis' },
+        tool_sandbox: { status: ['code_execution', 'destructive_action', 'tool_manipulation'].includes(primaryAttackType) ? 'blocked' : 'nominal', details: 'Tool access control' },
+        memory_sentinel: { status: primaryAttackType === 'memory_poisoning' ? 'quarantined' : 'nominal', details: 'Memory integrity check' },
+        output_gate: { status: primaryAttackType === 'data_exfiltration' ? 'filtered' : 'nominal', details: 'Output sanitization' },
+      },
+      trustScore: 0, // Will be updated by state
+      defenseMode: 'normal', // Will be updated by state
+      operatorSummary: event.operator_summary,
+    };
+
+    // Trigger graph animation
+    setActiveNodes(attackEvent.attackPath);
+    setActiveEdges(attackEvent.attackPath.slice(0, -1).map((n, i) => `${n}-${attackEvent.attackPath[i + 1]}`));
+    setShieldBurst(attackEvent.interceptionPoint);
+    setTimeout(() => {
+      setActiveNodes([]);
+      setActiveEdges([]);
+      setShieldBurst(null);
+    }, 4000);
+
+    // Update pipeline status
+    setPipelineStatus({
+      ingress: attackEvent.layers.prompt_gate.status,
+      intent: attackEvent.layers.reasoning_monitor.status,
+      sandbox: attackEvent.layers.tool_sandbox.status,
+      memory: attackEvent.layers.memory_sentinel.status,
+      egress: attackEvent.layers.output_gate.status,
+    });
+
+    // Add autonomous actions
+    addAction('🔍', `Detected ${attackTypes.length} threat vector(s): ${attackTypes.join(', ')}`, 'warning');
+    addAction('🛡️', `Decision: ${event.decision?.toUpperCase()} — ${event.recommended_action}`, 'critical');
+
+    setCurrentAttack(attackEvent);
+    setAttackHistory(prev => [attackEvent, ...prev].slice(0, 100));
+  }
+
+  // ──────────────────────────────────────────
+  // REST-based prompt analysis (synchronous path)
+  // ──────────────────────────────────────────
   const analyzePrompt = useCallback(async (prompt) => {
     setIsProcessing(true);
     setTotalAnalyzed(prev => prev + 1);
 
     try {
-      // Try to call the real backend
-      const response = await fetch('http://localhost:8000/api/analyze', {
+      // Call the real backend via legacy adapter
+      const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, session_id: 'default' }),
       });
 
       if (!response.ok) throw new Error('Backend unavailable');
-      
+
       const result = await response.json();
-      
+
       // Map backend result to frontend event
       const event = {
         id: result.id,
@@ -249,30 +381,30 @@ export function useAegis() {
         defenseMode: computeDefenseMode(result.trust_score),
       };
 
-      // Internal state updates
+      // Trust & defense mode updates from REST response
       setTrustScore(event.trustScore);
       setTotalBlocked(prev => result.is_malicious ? prev + 1 : prev);
-      
-      const prevMode = defenseMode;
-      const newMode = event.defenseMode;
-      if (newMode !== prevMode) {
-        setDefenseMode(newMode);
-        if (newMode === 'elevated' && prevMode === 'normal') addAction('🔶', `DEFENSE ESCALATED → ELEVATED MODE`, 'warning');
-        else if (newMode === 'lockdown') addAction('🚨', `DEFENSE ESCALATED → LOCKDOWN MODE`, 'critical');
-        else if (newMode === 'normal') addAction('✅', `DEFENSE RESTORED → NORMAL MODE`, 'recovery');
-      }
+
+      setDefenseMode(prevMode => {
+        const newMode = event.defenseMode;
+        if (newMode !== prevMode) {
+          if (newMode === 'elevated' && prevMode === 'normal') addAction('🔶', 'DEFENSE ESCALATED → ELEVATED MODE', 'warning');
+          else if (newMode === 'lockdown') addAction('🚨', 'DEFENSE ESCALATED → LOCKDOWN MODE', 'critical');
+          else if (newMode === 'normal') addAction('✅', 'DEFENSE RESTORED → NORMAL MODE', 'recovery');
+        }
+        return newMode;
+      });
 
       if (result.is_malicious) {
         addAction('🔍', `Detected ${result.attacks.length} threat(s)`, 'warning');
-        addAction('🔄', `Reconstructed prompt — neutralized vector(s)`, 'info');
+        addAction('🔄', 'Reconstructed prompt — neutralized vector(s)', 'info');
       }
 
-      // Attack graph path timing
+      // Attack graph path animation
       if (result.is_malicious) {
         setActiveNodes(event.attackPath);
         setActiveEdges(event.attackPath.slice(0, -1).map((n, i) => `${n}-${event.attackPath[i + 1]}`));
         setShieldBurst(event.interceptionPoint);
-
         setTimeout(() => {
           setActiveNodes([]);
           setActiveEdges([]);
@@ -301,89 +433,16 @@ export function useAegis() {
       if (event.isMalicious) setAttackHistory(prev => [event, ...prev].slice(0, 100));
 
     } catch (error) {
-      console.warn('AEGIS Backend offline, falling back to local simulation:', error);
-      
-      // FALLBACK TO LOCAL SIMULATION (Keep current logic)
-      await new Promise(r => setTimeout(r, 500));
-      const detectedAttacks = [];
-      for (const pattern of ATTACK_PATTERNS) {
-        if (pattern.pattern.test(prompt)) {
-          detectedAttacks.push({
-            ...pattern,
-            matchedPattern: pattern.pattern,
-            confidence: 0.85 + Math.random() * 0.14,
-          });
-        }
-      }
-
-      const isMalicious = detectedAttacks.length > 0;
-      const maxSeverity = isMalicious
-        ? detectedAttacks.reduce((max, a) => {
-            const order = { critical: 4, high: 3, medium: 2, low: 1 };
-            return order[a.severity] > order[max] ? a.severity : max;
-          }, 'low')
-        : 'safe';
-
-      const riskScore = isMalicious
-        ? Math.min(100, detectedAttacks.reduce((sum, a) => {
-            const weights = { critical: 35, high: 25, medium: 15, low: 8 };
-            return sum + (weights[a.severity] || 10);
-          }, 0))
-        : 0;
-
-      const prevTrust = trustScore;
-      let newTrust;
-      if (isMalicious) {
-        const decay = { critical: 30, high: 20, medium: 12, low: 5 };
-        const totalDecay = detectedAttacks.reduce((sum, a) => sum + (decay[a.severity] || 5), 0);
-        newTrust = Math.max(0, prevTrust - totalDecay);
-      } else {
-        newTrust = Math.min(100, prevTrust + 3);
-      }
-      setTrustScore(newTrust);
-
-      if (isMalicious) setTotalBlocked(prev => prev + 1);
-
-      const prevMode = defenseMode;
-      const newMode = computeDefenseMode(newTrust);
-
-      if (newMode !== prevMode) {
-        setDefenseMode(newMode);
-        if (newMode === 'elevated' && prevMode === 'normal') addAction('🔶', `DEFENSE ESCALATED (LOC)`, 'warning');
-        else if (newMode === 'lockdown') addAction('🚨', `DEFENSE ESCALATED (LOC)`, 'critical');
-      }
-
-      const eventId = ++eventIdRef.current;
-      const event = {
-        id: eventId,
-        timestamp: new Date(),
-        prompt,
-        isMalicious,
-        riskScore,
-        severity: maxSeverity,
-        attacks: detectedAttacks,
-        layers: {
-          prompt_gate: { status: isMalicious ? 'intercepted' : 'passed' },
-          reasoning_monitor: { status: 'nominal' },
-          tool_sandbox: { status: 'nominal' },
-          memory_sentinel: { status: 'nominal' },
-          output_gate: { status: 'nominal' },
-        },
-        trustScore: newTrust,
-        attackPath: isMalicious ? ['user', 'prompt_gate'] : [],
-        interceptionPoint: isMalicious ? 'prompt_gate' : null,
-      };
-
-      setCurrentAttack(event);
-      setEvents(prev => [event, ...prev].slice(0, 50));
+      console.warn('AEGIS Backend offline — prompt analysis unavailable:', error);
+      addAction('⚠️', 'Backend unreachable — scan not performed', 'warning');
     }
 
     setIsProcessing(false);
-  }, [trustScore, defenseMode, addAction]);
+  }, [addAction]);
 
   const resetTrust = useCallback(async () => {
     try {
-      await fetch('http://localhost:8000/api/reset-trust?session_id=default', { method: 'POST' });
+      await fetch('/api/reset-trust?session_id=default', { method: 'POST' });
     } catch (e) {
       console.warn('Backend reset failed:', e);
     }
@@ -405,7 +464,7 @@ export function useAegis() {
   const getAttackStats = useCallback(() => {
     const typeCounts = {};
     attackHistory.forEach(e => {
-      e.attacks.forEach(a => {
+      (e.attacks || []).forEach(a => {
         typeCounts[a.type] = (typeCounts[a.type] || 0) + 1;
       });
     });
@@ -436,6 +495,19 @@ export function useAegis() {
     getPermissions,
     getAttackStats,
     getSessionDuration,
+    documents,
+    urls,
+    loadSources: async () => {
+        const docs = await fetchDocuments();
+        setDocuments(docs);
+        const u = await fetchUrls();
+        setUrls(u);
+    },
     graphData: { nodes: ATTACK_GRAPH_NODES, edges: ATTACK_GRAPH_EDGES },
+
+    // Phase 2: WebSocket state
+    wsConnectionState: realtime.connectionState,
+    isWsConnected: realtime.isConnected,
+    systemStatus: realtime.systemStatus,
   };
 }

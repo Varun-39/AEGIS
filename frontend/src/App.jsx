@@ -16,6 +16,7 @@ import PromptDiff from './components/PromptDiff';
 import SecurityPosture from './components/SecurityPosture';
 import AttackTimeline from './components/AttackTimeline';
 import AutonomousActions from './components/AutonomousActions';
+import SourcesPanel from './components/SourcesPanel';
 
 export default function App() {
   const aegis = useAegis();
@@ -75,6 +76,7 @@ export default function App() {
             totalAnalyzed={aegis.totalAnalyzed}
             pipelineStatus={aegis.pipelineStatus}
             onReset={aegis.resetTrust}
+            wsConnectionState={aegis.wsConnectionState}
           />
 
           <div className="dashboard__main">
@@ -99,7 +101,7 @@ export default function App() {
                 events={aegis.events}
                 defenseMode={aegis.defenseMode}
               />
-              <AutonomousActions actions={aegis.autonomousActions} />
+              <AutonomousActions actions={aegis.autonomousActions} isWsConnected={aegis.isWsConnected} />
             </div>
           </div>
 
@@ -135,10 +137,19 @@ export default function App() {
                 >
                   Repair
                 </motion.button>
+                <motion.button
+                  className={`sidebar-tab ${sidebarTab === 'sources' ? 'sidebar-tab--active' : ''}`}
+                  onClick={() => setSidebarTab('sources')}
+                  whileHover={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  Sources
+                </motion.button>
               </div>
-              <div className="sidebar-tabs__content">
+              <div className="sidebar-tabs__content" style={{ overflowY: 'auto' }}>
                 {sidebarTab === 'report' && <AttackReport attack={aegis.currentAttack} />}
                 {sidebarTab === 'diff' && <PromptDiff attack={aegis.currentAttack} />}
+                {sidebarTab === 'sources' && <SourcesPanel documents={aegis.documents} urls={aegis.urls} loadSources={aegis.loadSources} />}
               </div>
             </div>
           </div>

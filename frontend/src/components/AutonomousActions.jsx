@@ -28,11 +28,15 @@ const actionVariants = {
   },
 };
 
-export default function AutonomousActions({ actions }) {
+export default function AutonomousActions({ actions, isWsConnected }) {
   const [simulatedActions, setSimulatedActions] = useState([]);
 
-  // Background simulation
+  // Background simulation — ONLY when WebSocket is disconnected and no real actions exist
   useEffect(() => {
+    if (isWsConnected) {
+      setSimulatedActions([]);
+      return;
+    }
     const interval = setInterval(() => {
       if (Math.random() > 0.65 && actions.length === 0) {
         const sim = SIMULATED_ACTIONS[Math.floor(Math.random() * SIMULATED_ACTIONS.length)];
@@ -45,7 +49,7 @@ export default function AutonomousActions({ actions }) {
       }
     }, 4000);
     return () => clearInterval(interval);
-  }, [actions.length]);
+  }, [actions.length, isWsConnected]);
 
   const allActions = [
     ...actions.map(a => ({ ...a, simulated: false })),
@@ -82,11 +86,11 @@ export default function AutonomousActions({ actions }) {
           <span style={{
             fontSize: '8px',
             fontFamily: 'var(--font-mono)',
-            color: 'var(--text-tertiary)',
+            color: isWsConnected ? 'var(--threat-safe)' : 'var(--text-tertiary)',
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
           }}>
-            AEGIS Active
+            {isWsConnected ? 'AEGIS Live' : 'AEGIS Offline'}
           </span>
         </div>
       </div>
